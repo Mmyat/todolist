@@ -17,8 +17,8 @@ func (r *TodoRepository) Create(todo *models.Todo) error {
     return r.db.Create(todo).Error
 }
 
-func (r *TodoRepository) GetAll() ([]models.Todo, error) {
+func (r *TodoRepository) GetAllWithPagination(offset, limit int) ([]models.Todo, error) {
     var todos []models.Todo
-    err := r.db.Find(&todos).Error
+    err := r.db.Offset(offset).Limit(limit).Find(&todos).Error
     return todos, err
 }

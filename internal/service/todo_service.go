@@ -38,7 +38,7 @@ func (s *TodoService) CreateTodo(ctx context.Context,todo *models.Todo) error {
 
 func (s *TodoService) GetAllTodosWithPagination(ctx context.Context, page, limit int) ([]models.Todo, error) {
 	offset := (page - 1) * limit
-	cacheKey := "all_todos_" + strconv.Itoa(offset) + "_" + strconv.Itoa(limit)
+	cacheKey := fmt.Sprintf("todos:p:%d:l:%d", page, limit)
 	val, err := s.redis.Get(ctx, cacheKey).Result()
 	if err == nil {
 		var todos []models.Todo
@@ -50,7 +50,7 @@ func (s *TodoService) GetAllTodosWithPagination(ctx context.Context, page, limit
 		}
 	}
 
-	todos, err := s.repo.GetAll()
+	todos, err := s.repo.GetAllWithPagination(offset, limit)
 	if err != nil {
 		return nil, err
 	}
