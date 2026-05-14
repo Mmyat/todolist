@@ -4,7 +4,7 @@ import "time"
 
 type Todo struct {
     ID        uint      `gorm:"primaryKey" json:"id"`
-    Title     string    `gorm:"not null" json:"title"`
+    Title     string    `gorm:"not null" json:"title" binding:"required"`
     Completed bool      `gorm:"default:false" json:"completed"`
     CreatedAt time.Time `json:"created_at"`
 }

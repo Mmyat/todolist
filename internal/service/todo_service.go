@@ -1,51 +1,61 @@
 package service
 
 import (
-    "context"
-	 "strconv"
-    "encoding/json"
-    "time"
-	 "errors"
-	 "fmt"
-    "todo-api/internal/models"
-	 "todo-api/internal/repository"
-    "github.com/redis/go-redis/v9"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
+	"todo-api/internal/models"
+	"todo-api/internal/repository"
+
+	"github.com/redis/go-redis/v9"
 )
+
 type TodoService struct {
-    repo *repository.TodoRepository
-    redis *redis.Client
+	repo  *repository.TodoRepository
+	redis *redis.Client
 }
 
 func NewTodoService(repo *repository.TodoRepository, redis *redis.Client) *TodoService {
-    return &TodoService{repo: repo, redis: redis}
+	return &TodoService{repo: repo, redis: redis}
 }
 
-func (s *TodoService) CreateTodo(ctx context.Context,todo *models.Todo) error {
-    if todo.Title == "" {
-        return errors.New("title cannot be empty")
-    }
+func (s *TodoService) CreateTodo(ctx context.Context, todo *models.Todo) error {
+	if todo.Title == "" {
+		return errors.New("title cannot be empty")
+	}
 	err := s.repo.Create(todo)
 	if err != nil {
-        return fmt.Errorf("database error: %w", err)
-    }
+		return fmt.Errorf("database error: %w", err)
+	}
+	
+	// Cache invalidation using Redis Sets
 	go func() {
-        cacheKey := "all_todos"
-        s.redis.Del(context.Background(), cacheKey)
-        fmt.Println("Redis cache cleared for data consistency")
-   }()
+		bgCtx := context.Background()
+		keys, err := s.redis.SMembers(bgCtx, "todos:pagination_keys").Result()
+		if err == nil && len(keys) > 0 {
+			// Delete all cached pages
+			s.redis.Del(bgCtx, keys...)
+			// Clear the tracking set
+			s.redis.Del(bgCtx, "todos:pagination_keys")
+		} else if err != nil && err != redis.Nil {
+			log.Printf("Failed to invalidate cache: %v\n", err)
+		}
+	}()
 	return nil
 }
 
 func (s *TodoService) GetAllTodosWithPagination(ctx context.Context, page, limit int) ([]models.Todo, error) {
 	offset := (page - 1) * limit
 	cacheKey := fmt.Sprintf("todos:p:%d:l:%d", page, limit)
+	
 	val, err := s.redis.Get(ctx, cacheKey).Result()
 	if err == nil {
 		var todos []models.Todo
-		start := time.Now()
 		if err := json.Unmarshal([]byte(val), &todos); err == nil {
-			println("redis is working for getting")
-			fmt.Printf("Redis Get took: %v\n", time.Since(start))
 			return todos, nil
 		}
 	}
@@ -58,10 +68,8 @@ func (s *TodoService) GetAllTodosWithPagination(ctx context.Context, page, limit
 	data, err := json.Marshal(todos)
 	if err == nil {
 		s.redis.Set(ctx, cacheKey, data, 10*time.Minute)
+		// Track this cache key in our set
+		s.redis.SAdd(ctx, "todos:pagination_keys", cacheKey)
 	}
-	go func() {
-        data, _ := json.Marshal(todos)
-        s.redis.Set(context.Background(), cacheKey, data, 10*time.Minute)
-   }()
 	return todos, nil
 }

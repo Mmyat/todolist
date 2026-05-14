@@ -36,7 +36,7 @@ func (h *TodoHandler) CreateTodo(c *gin.Context) {
 
     // Create အောင်မြင်၊ မအောင်မြင်ကို စစ်ဆေးပြီးမှ Status ပြန်ပေးပါ
     if err := h.service.CreateTodo(c.Request.Context(), &todo); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create todo"})
         return
     }
 
